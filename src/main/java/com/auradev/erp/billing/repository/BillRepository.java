@@ -1,5 +1,6 @@
 package com.auradev.erp.billing.repository;
 
+import com.auradev.erp.billing.dto.BillSummaryResponse;
 import com.auradev.erp.billing.entity.Bill;
 import com.auradev.erp.billing.entity.BillStatus;
 import org.springframework.data.jpa.repository.EntityGraph;
@@ -25,6 +26,28 @@ public interface BillRepository extends JpaRepository<Bill, UUID> {
 
     @EntityGraph(attributePaths = {"items", "items.product"})
     Optional<Bill> findByIdAndTenantIdAndStatus(UUID id, UUID tenantId, BillStatus status);
+
+    @Query("""
+            SELECT new com.auradev.erp.billing.dto.BillSummaryResponse(
+                b.id,
+                b.billNo,
+                (SELECT c.name FROM Customer c WHERE c.id = b.customerId),
+                (SELECT u.name FROM User u WHERE u.id = b.cashierId),
+                SIZE(b.items),
+                b.grandTotal,
+                b.paymentStatus,
+                b.createdAt)
+            FROM Bill b
+            WHERE b.tenantId = :tenantId
+              AND b.status = :status
+              AND (:q IS NULL OR :q = '' OR lower(b.billNo) LIKE lower(concat('%', :q, '%')))
+            ORDER BY b.createdAt DESC
+            """)
+    Page<BillSummaryResponse> searchCompletedSummaries(
+            @Param("tenantId") UUID tenantId,
+            @Param("status") BillStatus status,
+            @Param("q") String q,
+            Pageable pageable);
 
     @Query("""
             SELECT bi.product.id, COALESCE(SUM(bi.quantity), 0)

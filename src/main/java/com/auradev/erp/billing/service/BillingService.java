@@ -21,7 +21,9 @@ import com.auradev.erp.tenant.entity.Tenant;
 import com.auradev.erp.tenant.repository.TenantRepository;
 import com.auradev.erp.user.entity.User;
 import com.auradev.erp.user.repository.UserRepository;
+import com.auradev.erp.common.pagination.PageResponse;
 import lombok.RequiredArgsConstructor;
+import org.springframework.data.domain.Pageable;
 import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -142,6 +144,27 @@ public class BillingService {
                             b.getUpdatedAt());
                 })
                 .toList();
+    }
+
+    @Transactional(readOnly = true)
+    public PageResponse<BillSummaryResponse> listCompletedBills(String q, Pageable pageable) {
+        UUID tenantId = TenantContext.require();
+        var page = billRepository.searchCompletedSummaries(
+                tenantId, BillStatus.COMPLETED, blankToNull(q), pageable);
+        return PageResponse.of(page);
+    }
+
+    @Transactional(readOnly = true)
+    public BillResponse getBill(UUID id) {
+        UUID tenantId = TenantContext.require();
+        Bill bill = billRepository.findByIdAndTenantIdAndStatus(id, tenantId, BillStatus.COMPLETED)
+                .orElseThrow(() -> new EntityNotFoundException("Bill", id));
+        bill.getPayments().size();
+        Customer customer = customerRepository.findById(bill.getCustomerId())
+                .orElseThrow(() -> new EntityNotFoundException("Customer", bill.getCustomerId()));
+        User cashier = userRepository.findById(bill.getCashierId())
+                .orElseThrow(() -> new EntityNotFoundException("User", bill.getCashierId()));
+        return toBillResponse(bill, customer, cashier, BillStatus.COMPLETED, bill.getDiscountMode(), null);
     }
 
     @Transactional(readOnly = true)
@@ -522,6 +545,10 @@ public class BillingService {
             return up;
         }
         throw new BusinessException("UNAUTHENTICATED", "User context required");
+    }
+
+    private static String blankToNull(String q) {
+        return q == null || q.isBlank() ? null : q.trim();
     }
 
     private record ComputedLine(

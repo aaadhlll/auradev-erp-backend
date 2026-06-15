@@ -2,10 +2,13 @@ package com.auradev.erp.billing.controller;
 
 import com.auradev.erp.billing.dto.*;
 import com.auradev.erp.billing.service.BillingService;
+import com.auradev.erp.common.pagination.PageResponse;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
+import org.springframework.data.domain.Pageable;
+import org.springframework.data.web.PageableDefault;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.access.prepost.PreAuthorize;
@@ -21,6 +24,22 @@ import java.util.UUID;
 public class BillController {
 
     private final BillingService billingService;
+
+    @GetMapping
+    @Operation(summary = "List completed bills", description = "Paginated sales bill history")
+    @PreAuthorize("hasAnyRole('CASHIER','MANAGER','TENANT_ADMIN','SUPER_ADMIN')")
+    public ResponseEntity<PageResponse<BillSummaryResponse>> list(
+            @RequestParam(required = false) String q,
+            @PageableDefault(size = 25) Pageable pageable) {
+        return ResponseEntity.ok(billingService.listCompletedBills(q, pageable));
+    }
+
+    @GetMapping("/{id}")
+    @Operation(summary = "Get bill", description = "Full bill with line items for reprint")
+    @PreAuthorize("hasAnyRole('CASHIER','MANAGER','TENANT_ADMIN','SUPER_ADMIN')")
+    public ResponseEntity<BillResponse> get(@PathVariable UUID id) {
+        return ResponseEntity.ok(billingService.getBill(id));
+    }
 
     @PostMapping
     @ResponseStatus(HttpStatus.CREATED)

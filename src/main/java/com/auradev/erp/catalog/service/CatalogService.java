@@ -239,6 +239,78 @@ public class CatalogService {
         categoryRepository.save(category);
     }
 
+    @Transactional(readOnly = true)
+    public List<SupplierResponse> listSuppliers() {
+        return supplierRepository.findByActiveTrueOrderByNameAsc().stream()
+                .map(this::toSupplierResponse)
+                .collect(Collectors.toList());
+    }
+
+    public SupplierResponse createSupplier(CreateSupplierRequest req) {
+        String name = req.name().trim();
+        if (supplierRepository.existsByNameIgnoreCaseAndActiveTrue(name)) {
+            throw new BusinessException("DUPLICATE_SUPPLIER", "Supplier already exists: " + name);
+        }
+        String gstin = blankToNull(req.gstin());
+        if (gstin != null) {
+            supplierRepository.findByGstinIgnoreCaseAndActiveTrue(gstin).ifPresent(s -> {
+                throw new BusinessException("DUPLICATE_GSTIN", "GSTIN already used by: " + s.getName());
+            });
+        }
+        Supplier supplier = new Supplier();
+        applySupplierFields(supplier, req);
+        supplier.setActive(true);
+        return toSupplierResponse(supplierRepository.save(supplier));
+    }
+
+    public SupplierResponse updateSupplier(UUID id, CreateSupplierRequest req) {
+        Supplier supplier = supplierRepository.findById(id)
+                .orElseThrow(() -> new EntityNotFoundException("Supplier", id));
+        String name = req.name().trim();
+        supplierRepository.findByNameIgnoreCaseAndActiveTrue(name)
+                .filter(s -> !s.getId().equals(id))
+                .ifPresent(s -> {
+                    throw new BusinessException("DUPLICATE_SUPPLIER", "Supplier already exists: " + name);
+                });
+        String gstin = blankToNull(req.gstin());
+        if (gstin != null) {
+            supplierRepository.findByGstinIgnoreCaseAndActiveTrue(gstin)
+                    .filter(s -> !s.getId().equals(id))
+                    .ifPresent(s -> {
+                        throw new BusinessException("DUPLICATE_GSTIN", "GSTIN already used by: " + s.getName());
+                    });
+        }
+        applySupplierFields(supplier, req);
+        return toSupplierResponse(supplierRepository.save(supplier));
+    }
+
+    public void deleteSupplier(UUID id) {
+        Supplier supplier = supplierRepository.findById(id)
+                .orElseThrow(() -> new EntityNotFoundException("Supplier", id));
+        supplier.setActive(false);
+        supplierRepository.save(supplier);
+    }
+
+    private void applySupplierFields(Supplier supplier, CreateSupplierRequest req) {
+        supplier.setName(req.name().trim());
+        supplier.setContactPerson(blankToNull(req.contactPerson()));
+        supplier.setPhone(blankToNull(req.phone()));
+        supplier.setEmail(blankToNull(req.email()));
+        supplier.setGstin(blankToNull(req.gstin()));
+        supplier.setAddress(blankToNull(req.address()));
+    }
+
+    private SupplierResponse toSupplierResponse(Supplier s) {
+        return new SupplierResponse(
+                s.getId(),
+                s.getName(),
+                s.getContactPerson(),
+                s.getPhone(),
+                s.getEmail(),
+                s.getGstin(),
+                s.getAddress());
+    }
+
     private void applyCreate(Product product, CreateProductRequest req) {
         product.setName(req.name().trim());
         product.setSku(req.sku().trim());

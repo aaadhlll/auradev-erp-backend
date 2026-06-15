@@ -298,7 +298,8 @@ public class DashboardQueryRepository {
 
     public List<RecentBillRow> recentBillsInScope(UUID tenantId, DashboardScope scope, int limit) {
         var sql = new StringBuilder("""
-                SELECT b.bill_no,
+                SELECT b.id,
+                       b.bill_no,
                        c.name AS customer,
                        u.name AS cashier,
                        COALESCE(items.cnt, 0) AS items,
@@ -334,6 +335,7 @@ public class DashboardQueryRepository {
 
     private RecentBillRow mapRecentBill(ResultSet rs, int rowNum) throws SQLException {
         return new RecentBillRow(
+                (UUID) rs.getObject("id"),
                 rs.getString("bill_no"),
                 rs.getString("customer"),
                 rs.getString("cashier"),
