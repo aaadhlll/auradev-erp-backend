@@ -46,7 +46,7 @@ jobs:
       # -----------------------------------------------------------------------
       # mvn verify runs: compile → test → JaCoCo report → JaCoCo coverage check
       - name: Build and verify (tests + JaCoCo)
-        run: ./mvnw -B verify --no-transfer-progress
+        run: mvn -B verify --no-transfer-progress
 
       # -----------------------------------------------------------------------
       - name: Upload JaCoCo coverage report
