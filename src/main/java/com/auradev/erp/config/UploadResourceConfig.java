@@ -1,21 +1,19 @@
 package com.auradev.erp.config;
 
-import org.springframework.beans.factory.annotation.Value;
+import lombok.RequiredArgsConstructor;
 import org.springframework.context.annotation.Configuration;
 import org.springframework.web.servlet.config.annotation.ResourceHandlerRegistry;
 import org.springframework.web.servlet.config.annotation.WebMvcConfigurer;
 
-import java.nio.file.Path;
-
 @Configuration
+@RequiredArgsConstructor
 public class UploadResourceConfig implements WebMvcConfigurer {
 
-    @Value("${app.uploads.dir:uploads}")
-    private String uploadsDir;
+    private final UploadsDirectoryResolver uploadsDirectory;
 
     @Override
     public void addResourceHandlers(ResourceHandlerRegistry registry) {
-        String location = Path.of(uploadsDir).toAbsolutePath().toUri().toString();
+        String location = uploadsDirectory.getPath().toUri().toString();
         registry.addResourceHandler("/uploads/**")
                 .addResourceLocations(location.endsWith("/") ? location : location + "/");
     }

@@ -20,6 +20,7 @@ public class InventoryImportController {
     private final InventoryImportService importService;
 
     @GetMapping("/template")
+    @PreAuthorize("@authz.can(authentication, 'INVENTORY_IMPORT')")
     @Operation(summary = "Download Excel template for bulk inventory import")
     public ResponseEntity<byte[]> template() {
         byte[] bytes = importService.downloadTemplate();
@@ -32,6 +33,7 @@ public class InventoryImportController {
     }
 
     @GetMapping("/sample")
+    @PreAuthorize("@authz.can(authentication, 'INVENTORY_IMPORT')")
     @Operation(summary = "Download sample Excel with 100 products for bulk import testing")
     public ResponseEntity<byte[]> sample() {
         byte[] bytes = importService.downloadSample();
@@ -44,6 +46,7 @@ public class InventoryImportController {
     }
 
     @GetMapping("/stock-sample")
+    @PreAuthorize("@authz.can(authentication, 'INVENTORY_IMPORT')")
     @Operation(summary = "Download sample Excel for bulk stock adjustments on existing SKUs")
     public ResponseEntity<byte[]> stockSample() {
         byte[] bytes = importService.downloadStockAdjustmentSample();

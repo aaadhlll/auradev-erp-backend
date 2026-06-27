@@ -15,6 +15,7 @@ import org.springframework.validation.FieldError;
 import org.springframework.web.bind.MethodArgumentNotValidException;
 import org.springframework.web.bind.annotation.ExceptionHandler;
 import org.springframework.web.bind.annotation.RestControllerAdvice;
+import org.springframework.web.multipart.support.MissingServletRequestPartException;
 import org.springframework.web.server.ResponseStatusException;
 import org.springframework.web.servlet.resource.NoResourceFoundException;
 
@@ -94,6 +95,24 @@ public class GlobalExceptionHandler {
                 .instance(request.getRequestURI())
                 .timestamp(Instant.now())
                 .errors(fieldErrors)
+                .build();
+
+        return problem(HttpStatus.UNPROCESSABLE_ENTITY, body);
+    }
+
+    @ExceptionHandler(MissingServletRequestPartException.class)
+    public ResponseEntity<ApiError> handleMissingMultipartPart(
+            MissingServletRequestPartException ex,
+            HttpServletRequest request) {
+
+        ApiError body = ApiError.builder()
+                .type("https://erp.auradev.com/problems/validation-error")
+                .title("Upload Failed")
+                .status(HttpStatus.UNPROCESSABLE_ENTITY.value())
+                .detail("File part missing from upload — the request may have been altered in transit")
+                .code("EMPTY_FILE")
+                .instance(request.getRequestURI())
+                .timestamp(Instant.now())
                 .build();
 
         return problem(HttpStatus.UNPROCESSABLE_ENTITY, body);

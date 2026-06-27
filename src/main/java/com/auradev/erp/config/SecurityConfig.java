@@ -16,6 +16,7 @@ import org.springframework.security.config.annotation.method.configuration.Enabl
 import org.springframework.security.config.annotation.web.builders.HttpSecurity;
 import org.springframework.security.config.annotation.web.configuration.EnableWebSecurity;
 import org.springframework.security.config.annotation.web.configurers.AbstractHttpConfigurer;
+import org.springframework.security.config.annotation.web.configurers.HeadersConfigurer;
 import org.springframework.security.config.http.SessionCreationPolicy;
 import org.springframework.security.crypto.bcrypt.BCryptPasswordEncoder;
 import org.springframework.security.crypto.password.PasswordEncoder;
@@ -52,14 +53,18 @@ public class SecurityConfig {
 
     private static final String[] PUBLIC_GET_PATHS = {
             "/actuator/health",
+            "/actuator/health/**",
+            "/uploads/**",
+    };
+
+    private static final String[] DEV_PUBLIC_GET_PATHS = {
             "/swagger-ui/**",
             "/swagger-ui.html",
             "/api-docs/**",
             "/v3/api-docs/**",
-            "/uploads/**",
             "/api/v1/inventory/import/template",
             "/api/v1/inventory/import/sample",
-            "/api/v1/inventory/import/stock-sample"
+            "/api/v1/inventory/import/stock-sample",
     };
 
     private final JwtAuthFilter jwtAuthFilter;
@@ -76,18 +81,31 @@ public class SecurityConfig {
 
     @Bean
     public SecurityFilterChain securityFilterChain(HttpSecurity http) throws Exception {
+        boolean devProfile = isDevProfile();
+
         http
             .csrf(AbstractHttpConfigurer::disable)
             .cors(cors -> cors.configurationSource(corsConfigurationSource()))
             .anonymous(AbstractHttpConfigurer::disable)
+            .headers(headers -> headers
+                    .frameOptions(HeadersConfigurer.FrameOptionsConfig::sameOrigin)
+                    .contentTypeOptions(contentType -> {})
+                    .httpStrictTransportSecurity(hsts -> hsts
+                            .includeSubDomains(true)
+                            .maxAgeInSeconds(31_536_000)))
             .sessionManagement(session ->
                     session.sessionCreationPolicy(SessionCreationPolicy.STATELESS))
-            .authorizeHttpRequests(auth -> auth
+            .authorizeHttpRequests(auth -> {
+                    var chain = auth
                     .requestMatchers(HttpMethod.OPTIONS, "/**").permitAll()
                     .requestMatchers(HttpMethod.POST, PUBLIC_POST_PATHS).permitAll()
-                    .requestMatchers(HttpMethod.GET, PUBLIC_GET_PATHS).permitAll()
-                    .requestMatchers("/api/v1/**").authenticated()
-                    .anyRequest().authenticated())
+                    .requestMatchers(HttpMethod.GET, PUBLIC_GET_PATHS).permitAll();
+                    if (devProfile) {
+                        chain = chain.requestMatchers(HttpMethod.GET, DEV_PUBLIC_GET_PATHS).permitAll();
+                    }
+                    chain.requestMatchers("/api/v1/**").authenticated()
+                    .anyRequest().authenticated();
+            })
             .authenticationProvider(authenticationProvider())
             .addFilterBefore(jwtAuthFilter, UsernamePasswordAuthenticationFilter.class)
             .addFilterAfter(tenantContextFilter, JwtAuthFilter.class);
@@ -102,8 +120,7 @@ public class SecurityConfig {
     @Bean
     public CorsConfigurationSource corsConfigurationSource() {
         CorsConfiguration config = new CorsConfiguration();
-        boolean devProfile = java.util.Arrays.stream(environment.getActiveProfiles())
-                .anyMatch(p -> "dev".equalsIgnoreCase(p));
+        boolean devProfile = isDevProfile();
         if (devProfile) {
             config.setAllowedOriginPatterns(List.of(
                     "http://localhost:*",
@@ -146,5 +163,10 @@ public class SecurityConfig {
     @Bean
     public PasswordEncoder passwordEncoder() {
         return new BCryptPasswordEncoder();
+    }
+
+    private boolean isDevProfile() {
+        return java.util.Arrays.stream(environment.getActiveProfiles())
+                .anyMatch(p -> "dev".equalsIgnoreCase(p));
     }
 }
