@@ -4,6 +4,7 @@ import com.auradev.erp.audit.service.AuditService;
 import com.auradev.erp.auth.security.UserPrincipal;
 import com.auradev.erp.common.error.BusinessException;
 import com.auradev.erp.common.error.EntityNotFoundException;
+import com.auradev.erp.config.UploadsDirectoryResolver;
 import com.auradev.erp.settings.dto.BillingSettingsResponse;
 import com.auradev.erp.settings.dto.PrinterSettingsResponse;
 import com.auradev.erp.settings.dto.StoreProfileResponse;
@@ -46,7 +47,7 @@ import java.util.UUID;
 public class SettingsService {
 
     private static final Set<String> ALLOWED_LOGO_TYPES = Set.of(
-            "image/jpeg", "image/png", "image/webp", "image/jpg");
+            "image/jpeg", "image/jpg", "image/pjpeg", "image/png", "image/x-png", "image/webp");
     private static final long MAX_LOGO_BYTES = 2 * 1024 * 1024;
 
     private final TenantRepository tenantRepository;
@@ -54,9 +55,7 @@ public class SettingsService {
     private final CategoryRepository categoryRepository;
     private final AuditService auditService;
     private final TenantSettingsCache settingsCache;
-
-    @Value("${app.uploads.dir:uploads}")
-    private String uploadsDir;
+    private final UploadsDirectoryResolver uploadsDirectory;
 
     @Value("${app.public-base-url:http://localhost:8080}")
     private String publicBaseUrl;
@@ -89,24 +88,29 @@ public class SettingsService {
         if (file.getSize() > MAX_LOGO_BYTES) {
             throw new BusinessException("FILE_TOO_LARGE", "Logo must be 2 MB or smaller");
         }
+
         String contentType = file.getContentType();
-        if (contentType == null || !ALLOWED_LOGO_TYPES.contains(contentType.toLowerCase(Locale.ROOT))) {
+        String originalName = file.getOriginalFilename();
+        String ext = extensionForUpload(contentType, originalName);
+        if (ext == null) {
             throw new BusinessException("INVALID_FILE", "Logo must be JPEG, PNG, or WebP");
         }
 
         Tenant tenant = loadTenant();
-        String ext = extensionFor(contentType);
-        Path dir = Path.of(uploadsDir, "tenants", tenant.getId().toString());
+        Path dir = uploadsDirectory.getPath().resolve("tenants").resolve(tenant.getId().toString());
         try {
             Files.createDirectories(dir);
             Path target = dir.resolve("logo." + ext);
             Files.write(target, file.getBytes());
         } catch (IOException e) {
-            throw new BusinessException("UPLOAD_FAILED", "Could not save logo: " + e.getMessage());
+            throw new BusinessException(
+                    "UPLOAD_FAILED",
+                    "Could not save logo to " + dir + ": " + e.getMessage());
         }
 
         String logoPath = "/uploads/tenants/" + tenant.getId() + "/logo." + ext;
-        tenant.setLogoUrl(publicBaseUrl + logoPath);
+        // Store a relative path so the frontend can load via same-origin /uploads proxy.
+        tenant.setLogoUrl(logoPath);
         Tenant saved = tenantRepository.save(tenant);
         auditService.log("LOGO_UPLOADED", "tenant", saved.getId(), null);
         return toResponse(saved);
@@ -343,9 +347,26 @@ public class SettingsService {
 
     private static String extensionFor(String contentType) {
         return switch (contentType.toLowerCase(Locale.ROOT)) {
-            case "image/png" -> "png";
+            case "image/png", "image/x-png" -> "png";
             case "image/webp" -> "webp";
             default -> "jpg";
         };
+    }
+
+    /** Accept common browser / proxy MIME variants and fall back to filename extension. */
+    private static String extensionForUpload(String contentType, String originalFilename) {
+        if (contentType != null) {
+            String ct = contentType.toLowerCase(Locale.ROOT).split(";", 2)[0].trim();
+            if (ALLOWED_LOGO_TYPES.contains(ct)) {
+                return extensionFor(ct);
+            }
+        }
+        if (originalFilename != null) {
+            String lower = originalFilename.toLowerCase(Locale.ROOT);
+            if (lower.endsWith(".png")) return "png";
+            if (lower.endsWith(".webp")) return "webp";
+            if (lower.endsWith(".jpg") || lower.endsWith(".jpeg")) return "jpg";
+        }
+        return null;
     }
 }
