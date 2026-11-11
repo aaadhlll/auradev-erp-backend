@@ -59,6 +59,9 @@ public class Product extends CatalogEntity {
     @Column(name = "is_active", nullable = false)
     private boolean active = true;
 
+    @Column(name = "expiry_tracked", nullable = false)
+    private boolean expiryTracked = false;
+
     @Transient
     public StockStatus stockStatus(BigDecimal quantityOnHand, BigDecimal lowStockThreshold) {
         if (quantityOnHand == null || quantityOnHand.compareTo(BigDecimal.ZERO) <= 0) {

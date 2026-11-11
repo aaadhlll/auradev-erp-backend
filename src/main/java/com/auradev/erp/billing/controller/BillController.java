@@ -16,6 +16,10 @@ import org.springframework.web.bind.annotation.*;
 
 import java.util.List;
 import java.util.UUID;
+import java.nio.charset.StandardCharsets;
+import java.io.StringWriter;
+import org.apache.commons.csv.CSVFormat;
+import org.apache.commons.csv.CSVPrinter;
 
 @RestController
 @RequestMapping("/api/v1/bills")
@@ -24,6 +28,45 @@ import java.util.UUID;
 public class BillController {
 
     private final BillingService billingService;
+    private final com.auradev.erp.billing.service.SalesReturnService salesReturnService;
+
+    @GetMapping("/returns/report")
+    @PreAuthorize("@authz.can(authentication, 'BILL_VIEW')")
+    public ResponseEntity<PageResponse<SalesReturnReportRow>> returnReport(
+            @RequestParam(required = false) String q,
+            @PageableDefault(size = 25) Pageable pageable) {
+        return ResponseEntity.ok(salesReturnService.report(q, pageable));
+    }
+
+    @GetMapping("/returns/export/csv")
+    @PreAuthorize("@authz.can(authentication, 'BILL_VIEW')")
+    public ResponseEntity<byte[]> exportReturnReport(@RequestParam(required = false) String q) throws java.io.IOException {
+        StringWriter output = new StringWriter();
+        try (CSVPrinter csv = new CSVPrinter(output, CSVFormat.DEFAULT.builder().setHeader(
+                "Return no.", "Returned at", "Bill no.", "Customer", "Product", "SKU", "Quantity", "Refund", "Method", "Reason", "Processed by").build())) {
+            for (SalesReturnReportRow row : salesReturnService.reportForExport(q)) {
+                csv.printRecord(row.returnNo(), row.createdAt(), row.billNo(), row.customerName(), row.productName(),
+                        row.sku(), row.quantity(), row.refundAmount(), row.refundMethod(), row.reason(), row.processedBy());
+            }
+        }
+        return ResponseEntity.ok()
+                .header(org.springframework.http.HttpHeaders.CONTENT_DISPOSITION, "attachment; filename=\"sales-returns.csv\"")
+                .contentType(org.springframework.http.MediaType.parseMediaType("text/csv"))
+                .body(output.toString().getBytes(StandardCharsets.UTF_8));
+    }
+
+    @GetMapping("/{id:[0-9a-fA-F\\-]{36}}/returns")
+    @PreAuthorize("@authz.can(authentication, 'BILL_VIEW')")
+    public ResponseEntity<List<SalesReturnResponse>> listReturns(@PathVariable UUID id) {
+        return ResponseEntity.ok(salesReturnService.list(id));
+    }
+
+    @PostMapping("/{id:[0-9a-fA-F\\-]{36}}/returns")
+    @PreAuthorize("@authz.can(authentication, 'SALE_RETURN')")
+    public ResponseEntity<SalesReturnResponse> createReturn(
+            @PathVariable UUID id, @Valid @RequestBody CreateSalesReturnRequest request) {
+        return ResponseEntity.status(HttpStatus.CREATED).body(salesReturnService.create(id, request));
+    }
 
     @GetMapping
     @Operation(summary = "List completed bills", description = "Paginated sales bill history")

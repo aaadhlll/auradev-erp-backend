@@ -6,6 +6,7 @@ public record BillingSettingsResponse(
         int cashierMaxBillDiscountPercent,
         boolean allowHoldBill,
         boolean allowCreditSales,
+        boolean taxEnabled,
         boolean showCashierOnReceipt,
         boolean showGstBreakupOnReceipt,
         boolean showCustomerOnReceipt,

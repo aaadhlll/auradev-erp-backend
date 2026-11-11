@@ -10,6 +10,7 @@ public enum Permission {
     BILL_CREATE,
     BILL_VIEW,
     BILL_HOLD,
+    SALE_RETURN,
 
     INVENTORY_VIEW,
     INVENTORY_EDIT,
@@ -24,6 +25,7 @@ public enum Permission {
     SUPPLIER_MANAGE,
 
     CUSTOMER_VIEW,
+    CUSTOMER_CREDIT_SETTLE,
 
     SETTINGS_STORE_VIEW,
     SETTINGS_STORE_EDIT,

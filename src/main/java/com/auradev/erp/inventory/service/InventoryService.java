@@ -9,12 +9,16 @@ import com.auradev.erp.common.pagination.PageResponse;
 import com.auradev.erp.inventory.dto.SaleMovementLine;
 import com.auradev.erp.inventory.dto.StockAdjustRequest;
 import com.auradev.erp.inventory.dto.StockMovementResponse;
+import com.auradev.erp.inventory.dto.BatchReceiptRequest;
+import com.auradev.erp.inventory.dto.InventoryBatchResponse;
+import com.auradev.erp.inventory.entity.InventoryBatch;
 import com.auradev.erp.inventory.entity.Inventory;
 import com.auradev.erp.inventory.entity.MovementType;
 import com.auradev.erp.inventory.entity.RefType;
 import com.auradev.erp.inventory.entity.StockMovement;
 import com.auradev.erp.inventory.repository.InventoryRepository;
 import com.auradev.erp.inventory.repository.StockMovementRepository;
+import com.auradev.erp.inventory.repository.InventoryBatchRepository;
 import com.auradev.erp.tenant.TenantContext;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -26,6 +30,7 @@ import org.springframework.transaction.annotation.Transactional;
 
 import java.math.BigDecimal;
 import java.time.Instant;
+import java.time.LocalDate;
 import java.util.ArrayList;
 import java.util.LinkedHashMap;
 import java.util.List;
@@ -42,6 +47,7 @@ public class InventoryService {
     private final ProductRepository productRepository;
     private final InventoryRepository inventoryRepository;
     private final StockMovementRepository movementRepository;
+    private final InventoryBatchRepository batchRepository;
 
     public StockMovement recordMovement(
             UUID productId,
@@ -219,6 +225,44 @@ public class InventoryService {
         }
     }
 
+    public InventoryBatchResponse recordBatchReceipt(UUID productId, BatchReceiptRequest req) {
+        UUID tenantId = TenantContext.require();
+        Product product = productRepository.findById(productId)
+                .orElseThrow(() -> new EntityNotFoundException("Product", productId));
+        if (!product.isExpiryTracked()) {
+            throw new BusinessException("BATCH_NOT_ENABLED", "Enable batch and expiry tracking for this item before receiving a batch");
+        }
+        if (req.expiryDate() != null && req.expiryDate().isBefore(LocalDate.now())) {
+            throw new BusinessException("EXPIRED_BATCH", "An already expired batch cannot be received into saleable stock");
+        }
+
+        recordMovement(productId, MovementType.stock_receipt, req.quantity(), RefType.manual, null,
+                "Batch " + req.batchNumber().trim() + (req.notes() == null || req.notes().isBlank() ? "" : " · " + req.notes().trim()));
+
+        InventoryBatch batch = new InventoryBatch();
+        batch.setTenantId(tenantId);
+        batch.setProduct(product);
+        batch.setBatchNumber(req.batchNumber().trim());
+        batch.setExpiryDate(req.expiryDate());
+        batch.setReceivedDate(LocalDate.now());
+        batch.setQuantityReceived(req.quantity());
+        batch.setQuantityOnHand(req.quantity());
+        batch.setNotes(req.notes() == null || req.notes().isBlank() ? null : req.notes().trim());
+        batch.setCreatedAt(Instant.now());
+        batch.setCreatedBy(requireCurrentUserId());
+        return toBatchResponse(batchRepository.save(batch));
+    }
+
+    @Transactional(readOnly = true)
+    public List<InventoryBatchResponse> getBatches(UUID productId) {
+        UUID tenantId = TenantContext.require();
+        productRepository.findById(productId)
+                .orElseThrow(() -> new EntityNotFoundException("Product", productId));
+        return batchRepository.findByTenantIdAndProductIdOrderByExpiryDateAsc(tenantId, productId).stream()
+                .map(this::toBatchResponse)
+                .toList();
+    }
+
     private Inventory createInventoryRow(UUID tenantId, UUID productId) {
         Product product = productRepository.findById(productId)
                 .orElseThrow(() -> new EntityNotFoundException("Product", productId));
@@ -233,6 +277,7 @@ public class InventoryService {
     private boolean isStockOut(MovementType type) {
         return type == MovementType.sale
                 || type == MovementType.adjustment_out
+                || type == MovementType.count_out
                 || type == MovementType.waste;
     }
 
@@ -252,6 +297,11 @@ public class InventoryService {
                 m.getNotes(),
                 m.getCreatedAt()
         );
+    }
+
+    private InventoryBatchResponse toBatchResponse(InventoryBatch batch) {
+        return new InventoryBatchResponse(batch.getId(), batch.getBatchNumber(), batch.getExpiryDate(),
+                batch.getReceivedDate(), batch.getQuantityReceived(), batch.getQuantityOnHand(), batch.getNotes());
     }
 
     private UUID requireCurrentUserId() {

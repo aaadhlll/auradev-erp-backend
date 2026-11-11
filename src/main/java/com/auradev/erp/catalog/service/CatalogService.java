@@ -338,6 +338,7 @@ public class CatalogService {
         product.setPriceSelling(req.priceSelling());
         product.setCostPrice(req.costPrice());
         product.setTaxRatePct(req.taxRatePct());
+        product.setExpiryTracked(req.expiryTracked());
         product.setActive(true);
     }
 
@@ -353,6 +354,7 @@ public class CatalogService {
         product.setPriceSelling(req.priceSelling());
         product.setCostPrice(req.costPrice());
         product.setTaxRatePct(req.taxRatePct());
+        product.setExpiryTracked(req.expiryTracked());
     }
 
     private ProductResponse toResponse(Product p, Inventory inv, boolean stripCost) {
@@ -367,7 +369,7 @@ public class CatalogService {
                 p.getPriceMrp(), p.getPriceSelling(),
                 stripCost ? null : p.getCostPrice(), p.getTaxRatePct(),
                 qty, low, reorder,
-                p.stockStatus(qty, low), p.isActive(), p.getCreatedAt()
+                p.stockStatus(qty, low), p.isActive(), p.isExpiryTracked(), p.getCreatedAt()
         );
     }
 

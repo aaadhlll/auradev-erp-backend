@@ -9,6 +9,7 @@ public record UpdateBillingSettingsRequest(
         @Min(0) @Max(100) Integer cashierMaxBillDiscountPercent,
         Boolean allowHoldBill,
         Boolean allowCreditSales,
+        Boolean taxEnabled,
         Boolean showCashierOnReceipt,
         Boolean showGstBreakupOnReceipt,
         Boolean showCustomerOnReceipt,

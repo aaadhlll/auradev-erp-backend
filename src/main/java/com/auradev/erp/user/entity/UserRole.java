@@ -12,5 +12,6 @@ public enum UserRole {
     MANAGER,
     CASHIER,
     INVENTORY_STAFF,
+    PROCUREMENT_STAFF,
     ACCOUNTANT
 }

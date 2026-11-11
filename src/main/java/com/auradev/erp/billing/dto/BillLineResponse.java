@@ -4,6 +4,7 @@ import java.math.BigDecimal;
 import java.util.UUID;
 
 public record BillLineResponse(
+        UUID billItemId,
         UUID productId,
         String name,
         String sku,
@@ -12,5 +13,6 @@ public record BillLineResponse(
         BigDecimal unitPrice,
         BigDecimal lineDiscount,
         BigDecimal gstRate,
-        BigDecimal lineTotal
+        BigDecimal lineTotal,
+        BigDecimal returnedQuantity
 ) {}

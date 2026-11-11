@@ -59,6 +59,10 @@ public class Tenant {
     @Column(name = "logo_url")
     private String logoUrl;
 
+    /** ISO currency code used for all tenant-facing monetary amounts. */
+    @Column(name = "currency", nullable = false, length = 3)
+    private String currency = "QAR";
+
     @Column(name = "active", nullable = false)
     private boolean active = true;
 

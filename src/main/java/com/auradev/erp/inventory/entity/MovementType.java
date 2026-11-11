@@ -12,6 +12,10 @@ public enum MovementType {
     purchase,
     adjustment_in,
     adjustment_out,
+    opening_stock,
+    stock_receipt,
+    count_in,
+    count_out,
     customer_return,
     waste;
 

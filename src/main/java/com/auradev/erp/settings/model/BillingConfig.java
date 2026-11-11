@@ -9,13 +9,14 @@ public record BillingConfig(
         int cashierMaxBillDiscountPercent,
         boolean allowHoldBill,
         boolean allowCreditSales,
+        boolean taxEnabled,
         boolean showCashierOnReceipt,
         boolean showGstBreakupOnReceipt,
         boolean showCustomerOnReceipt,
         boolean roundTotalToRupee
 ) {
     public static BillingConfig defaults() {
-        return new BillingConfig(10, 15, 5, true, true, true, true, true, false);
+        return new BillingConfig(10, 15, 5, true, true, false, true, true, true, false);
     }
 
     public BillingConfig normalized() {
@@ -25,6 +26,7 @@ public record BillingConfig(
                 clamp(cashierMaxBillDiscountPercent, 0, 100),
                 allowHoldBill,
                 allowCreditSales,
+                taxEnabled,
                 showCashierOnReceipt,
                 showGstBreakupOnReceipt,
                 showCustomerOnReceipt,

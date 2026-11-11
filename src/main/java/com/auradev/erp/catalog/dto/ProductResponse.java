@@ -26,5 +26,6 @@ public record ProductResponse(
         BigDecimal reorderQuantity,
         StockStatus stockStatus,
         boolean isActive,
+        boolean expiryTracked,
         Instant createdAt
 ) {}

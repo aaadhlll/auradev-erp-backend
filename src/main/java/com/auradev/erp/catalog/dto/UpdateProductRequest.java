@@ -18,5 +18,6 @@ public record UpdateProductRequest(
         BigDecimal costPrice,
         @NotNull @DecimalMin("0") BigDecimal taxRatePct,
         @PositiveOrZero BigDecimal lowStockThreshold,
-        @PositiveOrZero BigDecimal reorderQuantity
+        @PositiveOrZero BigDecimal reorderQuantity,
+        boolean expiryTracked
 ) {}

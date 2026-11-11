@@ -27,6 +27,7 @@ public final class RolePermissions {
             Permission.BILL_CREATE,
             Permission.BILL_VIEW,
             Permission.BILL_HOLD,
+            Permission.SALE_RETURN,
             Permission.INVENTORY_VIEW,
             Permission.INVENTORY_EDIT,
             Permission.INVENTORY_IMPORT,
@@ -36,6 +37,7 @@ public final class RolePermissions {
             Permission.PURCHASE_MANAGE,
             Permission.SUPPLIER_MANAGE,
             Permission.CUSTOMER_VIEW,
+            Permission.CUSTOMER_CREDIT_SETTLE,
             Permission.SETTINGS_STORE_VIEW,
             Permission.SETTINGS_BILLING_VIEW,
             Permission.SETTINGS_BILLING_EDIT,
@@ -51,6 +53,7 @@ public final class RolePermissions {
             Permission.BILL_HOLD,
             Permission.INVENTORY_VIEW,
             Permission.CUSTOMER_VIEW,
+            Permission.CUSTOMER_CREDIT_SETTLE,
             Permission.SETTINGS_PRINTER_VIEW
     );
 
@@ -70,7 +73,14 @@ public final class RolePermissions {
             Permission.INVENTORY_VIEW,
             Permission.INVENTORY_EXPORT,
             Permission.PURCHASE_VIEW,
+            Permission.CUSTOMER_CREDIT_SETTLE,
             Permission.AUDIT_VIEW
+    );
+
+    private static final Set<Permission> PROCUREMENT_STAFF_PERMS = EnumSet.of(
+            Permission.PURCHASE_VIEW,
+            Permission.PURCHASE_MANAGE,
+            Permission.SUPPLIER_MANAGE
     );
 
     public static Set<Permission> forRole(UserRole role) {
@@ -81,6 +91,7 @@ public final class RolePermissions {
             case MANAGER -> MANAGER_PERMS;
             case CASHIER -> CASHIER_PERMS;
             case INVENTORY_STAFF -> INVENTORY_STAFF_PERMS;
+            case PROCUREMENT_STAFF -> PROCUREMENT_STAFF_PERMS;
             case ACCOUNTANT -> ACCOUNTANT_PERMS;
         };
     }

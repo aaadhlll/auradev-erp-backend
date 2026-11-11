@@ -19,5 +19,6 @@ public record CreateProductRequest(
         @NotNull @DecimalMin("0") BigDecimal taxRatePct,
         @NotNull @PositiveOrZero BigDecimal initialStock,
         @PositiveOrZero BigDecimal lowStockThreshold,
-        @PositiveOrZero BigDecimal reorderQuantity
+        @PositiveOrZero BigDecimal reorderQuantity,
+        boolean expiryTracked
 ) {}

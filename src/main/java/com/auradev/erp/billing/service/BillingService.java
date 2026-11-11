@@ -7,6 +7,9 @@ import com.auradev.erp.billing.entity.*;
 import com.auradev.erp.billing.repository.BillRepository;
 import com.auradev.erp.billing.repository.BillSequenceRepository;
 import com.auradev.erp.billing.repository.CustomerRepository;
+import com.auradev.erp.billing.repository.CustomerCreditPaymentRepository;
+import com.auradev.erp.billing.repository.SalesReturnItemRepository;
+import com.auradev.erp.billing.repository.SalesReturnRepository;
 import com.auradev.erp.catalog.entity.Product;
 import com.auradev.erp.catalog.entity.Category;
 import com.auradev.erp.catalog.repository.ProductRepository;
@@ -51,6 +54,8 @@ import java.util.List;
 import java.util.Map;
 import java.util.TreeMap;
 import java.util.UUID;
+import java.util.Comparator;
+import java.util.Set;
 import java.util.stream.Collectors;
 
 @Service
@@ -70,6 +75,9 @@ public class BillingService {
     private final InventoryRepository inventoryRepository;
     private final AuditService auditService;
     private final SettingsService settingsService;
+    private final SalesReturnItemRepository salesReturnItemRepository;
+    private final SalesReturnRepository salesReturnRepository;
+    private final CustomerCreditPaymentRepository customerCreditPaymentRepository;
 
     @Transactional(readOnly = true)
     public List<CustomerResponse> listCustomers() {
@@ -105,6 +113,102 @@ public class BillingService {
         Customer saved = customerRepository.save(customer);
         auditService.log("CUSTOMER_CREATED", "customer", saved.getId(), Map.of("name", saved.getName()));
         return toCustomerResponse(saved);
+    }
+
+    public CustomerCreditPaymentResponse settleCustomerCredit(UUID customerId, CreateCustomerCreditPaymentRequest request) {
+        UUID tenantId = TenantContext.require();
+        UserPrincipal actor = requirePrincipal();
+        if (request.paymentMethod() == PaymentMethod.CREDIT || request.paymentMethod() == PaymentMethod.SPLIT_COMPONENT) {
+            throw new BusinessException("INVALID_CREDIT_PAYMENT_METHOD", "Use Cash, UPI, or Card to settle credit");
+        }
+        Customer customer = customerRepository.findForCreditPaymentByIdAndTenantId(customerId, tenantId)
+                .orElseThrow(() -> new EntityNotFoundException("Customer", customerId));
+        if (customer.getType() == CustomerType.walkin) {
+            throw new BusinessException("WALKIN_CREDIT_PAYMENT", "Walk-in customers do not have a credit balance");
+        }
+        if (customer.getCreditBalance().compareTo(BigDecimal.ZERO) <= 0) {
+            throw new BusinessException("NO_CREDIT_DUE", "This customer has no credit balance due");
+        }
+        BigDecimal amount = MoneyUtils.roundHalfUp2(request.amount());
+        if (amount.compareTo(customer.getCreditBalance()) > 0) {
+            throw new BusinessException("CREDIT_PAYMENT_EXCEEDS_DUE", "Payment cannot exceed the outstanding credit balance");
+        }
+        BigDecimal balanceAfter = customer.getCreditBalance().subtract(amount);
+        customer.setCreditBalance(balanceAfter);
+        CustomerCreditPayment payment = new CustomerCreditPayment();
+        payment.setTenantId(tenantId);
+        payment.setCustomer(customer);
+        payment.setPaymentNo("CP-" + UUID.randomUUID().toString().substring(0, 8).toUpperCase());
+        payment.setAmount(amount);
+        payment.setBalanceAfter(balanceAfter);
+        payment.setPaymentMethod(request.paymentMethod());
+        payment.setNotes(blankToNull(request.notes()));
+        payment.setCreatedBy(actor.getId());
+        payment.setCreatedAt(Instant.now());
+        customerRepository.save(customer);
+        CustomerCreditPayment saved = customerCreditPaymentRepository.save(payment);
+        auditService.log("CUSTOMER_CREDIT_SETTLED", "customer_credit_payment", saved.getId(), Map.of(
+                "customer", customer.getName(), "paymentNo", saved.getPaymentNo(), "amount", amount, "balanceAfter", balanceAfter));
+        return toCreditPaymentResponse(saved, cashierDisplayName(actor));
+    }
+
+    @Transactional(readOnly = true)
+    public List<CustomerCreditPaymentResponse> listCustomerCreditPayments(UUID customerId) {
+        UUID tenantId = TenantContext.require();
+        if (!customerRepository.findByIdAndTenantId(customerId, tenantId).isPresent()) {
+            throw new EntityNotFoundException("Customer", customerId);
+        }
+        List<CustomerCreditPayment> payments = customerCreditPaymentRepository
+                .findTop50ByTenantIdAndCustomerIdOrderByCreatedAtDesc(tenantId, customerId);
+        Map<UUID, String> names = userRepository.findAllById(payments.stream()
+                .map(CustomerCreditPayment::getCreatedBy).distinct().toList()).stream()
+                .collect(Collectors.toMap(User::getId, User::getName));
+        return payments.stream()
+                .map(payment -> toCreditPaymentResponse(payment, names.getOrDefault(payment.getCreatedBy(), "—"))).toList();
+    }
+
+    @Transactional(readOnly = true)
+    public CustomerCreditLedgerResponse customerCreditLedger(UUID customerId) {
+        UUID tenantId = TenantContext.require();
+        Customer customer = customerRepository.findByIdAndTenantId(customerId, tenantId)
+                .orElseThrow(() -> new EntityNotFoundException("Customer", customerId));
+        List<Bill> bills = billRepository.findByTenantIdAndCustomerIdAndStatusAndPaymentStatusOrderByCreatedAtAsc(
+                tenantId, customerId, BillStatus.COMPLETED, BillPaymentStatus.CREDIT);
+        List<CustomerCreditPayment> payments = customerCreditPaymentRepository
+                .findTop50ByTenantIdAndCustomerIdOrderByCreatedAtDesc(tenantId, customerId);
+        Set<UUID> userIds = new java.util.HashSet<>();
+        bills.forEach(bill -> userIds.add(bill.getCashierId()));
+        payments.forEach(payment -> userIds.add(payment.getCreatedBy()));
+        Map<UUID, String> users = userRepository.findAllById(userIds).stream()
+                .collect(Collectors.toMap(User::getId, User::getName));
+        record LedgerSource(boolean charge, Instant createdAt, Bill bill, CustomerCreditPayment payment) {}
+        List<LedgerSource> events = new ArrayList<>();
+        bills.forEach(bill -> events.add(new LedgerSource(true, bill.getCreatedAt(), bill, null)));
+        payments.forEach(payment -> events.add(new LedgerSource(false, payment.getCreatedAt(), null, payment)));
+        events.sort(Comparator.comparing(LedgerSource::createdAt).thenComparing(source -> source.charge() ? 0 : 1));
+        BigDecimal runningBalance = BigDecimal.ZERO;
+        List<CustomerCreditLedgerEntry> entries = new ArrayList<>();
+        for (LedgerSource event : events) {
+            if (event.charge()) {
+                Bill bill = event.bill();
+                runningBalance = runningBalance.add(bill.getGrandTotal());
+                entries.add(new CustomerCreditLedgerEntry(bill.getId(), "CREDIT_SALE", bill.getBillNo(), "Credit sale",
+                        bill.getGrandTotal(), BigDecimal.ZERO, runningBalance, PaymentMethod.CREDIT, null,
+                        users.getOrDefault(bill.getCashierId(), "—"), bill.getCreatedAt()));
+            } else {
+                CustomerCreditPayment payment = event.payment();
+                runningBalance = runningBalance.subtract(payment.getAmount());
+                entries.add(new CustomerCreditLedgerEntry(payment.getId(), "SETTLEMENT", payment.getPaymentNo(), "Credit settlement",
+                        BigDecimal.ZERO, payment.getAmount(), runningBalance, payment.getPaymentMethod(), payment.getNotes(),
+                        users.getOrDefault(payment.getCreatedBy(), "—"), payment.getCreatedAt()));
+            }
+        }
+        return new CustomerCreditLedgerResponse(customer.getCreditBalance(), entries.reversed());
+    }
+
+    private CustomerCreditPaymentResponse toCreditPaymentResponse(CustomerCreditPayment payment, String receivedBy) {
+        return new CustomerCreditPaymentResponse(payment.getId(), payment.getPaymentNo(), payment.getAmount(),
+                payment.getPaymentMethod(), payment.getNotes(), receivedBy, payment.getCreatedAt(), payment.getBalanceAfter());
     }
 
     public BillResponse createBill(CreateBillRequest req) {
@@ -646,6 +750,9 @@ public class BillingService {
     }
 
     private TaxConfig effectiveTaxConfig(GstScheme override) {
+        if (!settingsService.getBillingConfig().taxEnabled()) {
+            return new TaxConfig(GstScheme.PRODUCT, false, List.of(0), BigDecimal.ZERO, BigDecimal.ZERO, List.of());
+        }
         TaxConfig base = settingsService.getTaxConfig().normalized();
         if (override == null || override == base.scheme()) {
             return base;
@@ -660,6 +767,12 @@ public class BillingService {
     }
 
     private BigDecimal resolveGstRate(Product product, TaxConfig tax) {
+        // TaxConfig used for a tax-disabled tenant contains only the zero rate.
+        // Product records retain their historical tax rate, so never read that
+        // rate when no positive rate is enabled for this tenant.
+        if (tax.enabledRates().stream().noneMatch(rate -> rate != null && rate > 0)) {
+            return BigDecimal.ZERO;
+        }
         return switch (tax.scheme()) {
             case COMPOSITE -> tax.compositeRatePct();
             case CATEGORY -> {
@@ -848,8 +961,11 @@ public class BillingService {
             BillStatus status,
             DiscountMode discountMode,
             PaymentInput payment) {
+        Map<UUID, BigDecimal> returnedQuantities = salesReturnItemRepository.returnedQuantitiesForBill(bill.getId()).stream()
+                .collect(Collectors.toMap(row -> (UUID) row[0], row -> (BigDecimal) row[1]));
         List<BillLineResponse> lines = bill.getItems().stream()
                 .map(i -> new BillLineResponse(
+                        i.getId(),
                         i.getProduct().getId(),
                         i.getProductNameSnapshot(),
                         i.getSkuSnapshot(),
@@ -858,7 +974,8 @@ public class BillingService {
                         i.getUnitPrice(),
                         i.getLineDiscount(),
                         i.getGstRate(),
-                        i.getLineTotal()))
+                        i.getLineTotal(),
+                        returnedQuantities.getOrDefault(i.getId(), BigDecimal.ZERO)))
                 .toList();
 
         Payment primary = bill.getPayments().isEmpty() ? null : bill.getPayments().get(0);

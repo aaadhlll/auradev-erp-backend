@@ -9,6 +9,11 @@ import com.auradev.erp.settings.dto.UpdateStoreProfileRequest;
 import com.auradev.erp.settings.dto.TaxSettingsResponse;
 import com.auradev.erp.settings.dto.UpdateTaxSettingsRequest;
 import com.auradev.erp.settings.service.SettingsService;
+import com.auradev.erp.settings.service.RoleModuleAccessService;
+import com.auradev.erp.settings.dto.RoleModuleAccessResponse;
+import com.auradev.erp.settings.dto.UpdateRoleModuleAccessRequest;
+import com.auradev.erp.auth.security.UserPrincipal;
+import org.springframework.security.core.annotation.AuthenticationPrincipal;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import jakarta.validation.Valid;
@@ -26,6 +31,26 @@ import org.springframework.web.multipart.MultipartFile;
 public class SettingsController {
 
     private final SettingsService settingsService;
+    private final RoleModuleAccessService roleModuleAccessService;
+
+    @GetMapping("/module-access/me")
+    @PreAuthorize("isAuthenticated()")
+    public ResponseEntity<java.util.List<String>> getMyModules(@AuthenticationPrincipal UserPrincipal principal) {
+        return ResponseEntity.ok(roleModuleAccessService.enabledForCurrentTenant(principal.getRole()));
+    }
+
+    @GetMapping("/module-access")
+    @PreAuthorize("@authz.can(authentication, 'SETTINGS_USERS_MANAGE')")
+    public ResponseEntity<RoleModuleAccessResponse> getModuleAccess() {
+        return ResponseEntity.ok(roleModuleAccessService.getMatrix());
+    }
+
+    @PutMapping("/module-access")
+    @PreAuthorize("@authz.can(authentication, 'SETTINGS_USERS_MANAGE')")
+    public ResponseEntity<RoleModuleAccessResponse> updateModuleAccess(
+            @Valid @RequestBody UpdateRoleModuleAccessRequest request) {
+        return ResponseEntity.ok(roleModuleAccessService.updateMatrix(request));
+    }
 
     @GetMapping("/profile")
     @PreAuthorize("@authz.canAny(authentication, 'SETTINGS_STORE_VIEW', 'SETTINGS_STORE_EDIT')")

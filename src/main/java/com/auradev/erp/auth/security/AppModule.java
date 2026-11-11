@@ -1,0 +1,20 @@
+package com.auradev.erp.auth.security;
+
+public enum AppModule {
+    OVERVIEW,
+    POS,
+    INVENTORY,
+    PROCUREMENT,
+    ADMINISTRATION;
+
+    public static AppModule forPermission(Permission permission) {
+        return switch (permission) {
+            case DASHBOARD_VIEW -> OVERVIEW;
+            case BILL_CREATE, BILL_VIEW, BILL_HOLD, SALE_RETURN, CUSTOMER_VIEW, CUSTOMER_CREDIT_SETTLE -> POS;
+            case INVENTORY_VIEW, INVENTORY_EDIT, INVENTORY_IMPORT, INVENTORY_EXPORT, PRODUCT_MANAGE -> INVENTORY;
+            case PURCHASE_VIEW, PURCHASE_MANAGE, SUPPLIER_MANAGE -> PROCUREMENT;
+            case SETTINGS_STORE_VIEW, SETTINGS_STORE_EDIT, SETTINGS_BILLING_VIEW, SETTINGS_BILLING_EDIT,
+                    SETTINGS_PRINTER_VIEW, SETTINGS_PRINTER_EDIT, SETTINGS_USERS_MANAGE, AUDIT_VIEW -> ADMINISTRATION;
+        };
+    }
+}

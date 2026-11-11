@@ -11,5 +11,6 @@ public record StoreProfileResponse(
         String address,
         String billNoPrefix,
         String billFooter,
-        String logoUrl
+        String logoUrl,
+        String currency
 ) {}

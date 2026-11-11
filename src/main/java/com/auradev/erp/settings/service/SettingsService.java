@@ -76,6 +76,9 @@ public class SettingsService {
         tenant.setAddress(blankToNull(req.address()));
         tenant.setBillNoPrefix(req.billNoPrefix().trim());
         tenant.setBillFooter(blankToNull(req.billFooter()));
+        if (req.currency() != null) {
+            tenant.setCurrency(req.currency());
+        }
         Tenant saved = tenantRepository.save(tenant);
         auditService.log("STORE_PROFILE_UPDATED", "tenant", saved.getId(), Map.of("name", saved.getName()));
         return toResponse(saved);
@@ -180,6 +183,7 @@ public class SettingsService {
                 req.cashierMaxBillDiscountPercent() != null ? req.cashierMaxBillDiscountPercent() : current.cashierMaxBillDiscountPercent(),
                 req.allowHoldBill() != null ? req.allowHoldBill() : current.allowHoldBill(),
                 req.allowCreditSales() != null ? req.allowCreditSales() : current.allowCreditSales(),
+                req.taxEnabled() != null ? req.taxEnabled() : current.taxEnabled(),
                 req.showCashierOnReceipt() != null ? req.showCashierOnReceipt() : current.showCashierOnReceipt(),
                 req.showGstBreakupOnReceipt() != null ? req.showGstBreakupOnReceipt() : current.showGstBreakupOnReceipt(),
                 req.showCustomerOnReceipt() != null ? req.showCustomerOnReceipt() : current.showCustomerOnReceipt(),
@@ -194,7 +198,8 @@ public class SettingsService {
         auditService.log("BILLING_SETTINGS_UPDATED", "tenant_settings", settings.getTenantId(), Map.of(
                 "maxBillDiscountPercent", updated.maxBillDiscountPercent(),
                 "allowHoldBill", updated.allowHoldBill(),
-                "allowCreditSales", updated.allowCreditSales()));
+                "allowCreditSales", updated.allowCreditSales(),
+                "taxEnabled", updated.taxEnabled()));
         return toBillingResponse(updated);
     }
 
@@ -287,6 +292,7 @@ public class SettingsService {
                 c.cashierMaxBillDiscountPercent(),
                 c.allowHoldBill(),
                 c.allowCreditSales(),
+                c.taxEnabled(),
                 c.showCashierOnReceipt(),
                 c.showGstBreakupOnReceipt(),
                 c.showCustomerOnReceipt(),
@@ -337,7 +343,8 @@ public class SettingsService {
                 tenant.getAddress(),
                 tenant.getBillNoPrefix(),
                 tenant.getBillFooter(),
-                tenant.getLogoUrl());
+                tenant.getLogoUrl(),
+                tenant.getCurrency());
     }
 
     private static String blankToNull(String v) {

@@ -3,6 +3,7 @@ package com.auradev.erp.billing.repository;
 import com.auradev.erp.billing.dto.BillSummaryResponse;
 import com.auradev.erp.billing.entity.Bill;
 import com.auradev.erp.billing.entity.BillStatus;
+import com.auradev.erp.billing.entity.BillPaymentStatus;
 import org.springframework.data.jpa.repository.EntityGraph;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
@@ -10,6 +11,8 @@ import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
 import org.springframework.stereotype.Repository;
+import jakarta.persistence.LockModeType;
+import org.springframework.data.jpa.repository.Lock;
 
 import java.math.BigDecimal;
 import java.util.HashMap;
@@ -21,6 +24,11 @@ import java.util.UUID;
 @Repository
 public interface BillRepository extends JpaRepository<Bill, UUID> {
 
+    @Lock(LockModeType.PESSIMISTIC_WRITE)
+    @EntityGraph(attributePaths = {"items", "items.product"})
+    @Query("select b from Bill b where b.id = :id and b.tenantId = :tenantId and b.status = :status")
+    Optional<Bill> findForReturn(@Param("id") UUID id, @Param("tenantId") UUID tenantId, @Param("status") BillStatus status);
+
     @EntityGraph(attributePaths = {"items", "items.product"})
     List<Bill> findByTenantIdAndStatusOrderByUpdatedAtDesc(UUID tenantId, BillStatus status);
 
@@ -29,6 +37,9 @@ public interface BillRepository extends JpaRepository<Bill, UUID> {
 
     @EntityGraph(attributePaths = {"items", "items.product"})
     Optional<Bill> findByTenantIdAndCustomerIdAndStatus(UUID tenantId, UUID customerId, BillStatus status);
+
+    List<Bill> findByTenantIdAndCustomerIdAndStatusAndPaymentStatusOrderByCreatedAtAsc(
+            UUID tenantId, UUID customerId, BillStatus status, BillPaymentStatus paymentStatus);
 
     @Query("""
             SELECT new com.auradev.erp.billing.dto.BillSummaryResponse(

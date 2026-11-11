@@ -7,6 +7,8 @@ import com.auradev.erp.catalog.service.CatalogService;
 import com.auradev.erp.common.pagination.PageResponse;
 import com.auradev.erp.inventory.dto.ProductStockAdjustBody;
 import com.auradev.erp.inventory.dto.StockMovementResponse;
+import com.auradev.erp.inventory.dto.BatchReceiptRequest;
+import com.auradev.erp.inventory.dto.InventoryBatchResponse;
 import com.auradev.erp.inventory.service.InventoryService;
 import com.auradev.erp.tenant.TenantContext;
 import io.swagger.v3.oas.annotations.Operation;
@@ -88,6 +90,21 @@ public class ProductController {
             @PathVariable UUID id,
             @PageableDefault(size = 50, sort = "createdAt", direction = Sort.Direction.DESC) Pageable pageable) {
         return ResponseEntity.ok(inventoryService.getMovements(id, pageable));
+    }
+
+    @GetMapping("/{id}/batches")
+    @PreAuthorize("@authz.can(authentication, 'INVENTORY_VIEW')")
+    public ResponseEntity<List<InventoryBatchResponse>> batches(@PathVariable UUID id) {
+        return ResponseEntity.ok(inventoryService.getBatches(id));
+    }
+
+    @PostMapping("/{id}/batches/receipt")
+    @ResponseStatus(HttpStatus.CREATED)
+    @PreAuthorize("@authz.can(authentication, 'INVENTORY_EDIT')")
+    public ResponseEntity<InventoryBatchResponse> receiveBatch(
+            @PathVariable UUID id,
+            @Valid @RequestBody BatchReceiptRequest req) {
+        return ResponseEntity.status(HttpStatus.CREATED).body(inventoryService.recordBatchReceipt(id, req));
     }
 
     @PostMapping
